@@ -1,0 +1,39 @@
+from pydantic_settings import BaseSettings
+from pydantic import field_validator
+from typing import List
+
+
+class Settings(BaseSettings):
+    DATABASE_URL: str = "postgresql://portal_user:portal_pass@portal-postgres:5432/portal_db"
+    LM_STUDIO_URL: str = "http://host.docker.internal:1234/v1"
+    HOMEHUB_API_URL: str = "http://portal-backend:8000/api/v1"
+    API_V1_PREFIX: str = "/api/v1"
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:5174",
+        "http://localhost:8100",
+    ]
+    IMAGE_INPUT_DIR: str = "/app/images/input"
+    IMAGE_OUTPUT_DIR: str = "/app/images/output"
+    IMAGE_REJECT_DIR: str = "/app/images/reject"
+    LOG_LEVEL: str = "INFO"
+
+    @field_validator('CORS_ORIGINS', mode='after')
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, list):
+            return v
+        try:
+            import json
+            parsed = json.loads(v)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return [origin.strip() for origin in v.split(',') if origin.strip()]
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+
+settings = Settings()
