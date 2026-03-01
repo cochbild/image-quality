@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
-from app.api import scans, assessments, settings_api, health
+from app.api import scans, assessments, settings_api, health, images
 from app.db.session import engine, wait_for_database, SessionLocal
 from app.db.base import Base
 from app.db.models import Scan, Assessment, CategoryScore, Setting
@@ -38,6 +38,7 @@ app.include_router(health.router, tags=["health"])
 app.include_router(scans.router, prefix="/api/v1/scans", tags=["scans"])
 app.include_router(assessments.router, prefix="/api/v1/assessments", tags=["assessments"])
 app.include_router(settings_api.router, prefix="/api/v1/settings", tags=["settings"])
+app.include_router(images.router, prefix="/api/v1/images", tags=["images"])
 
 # Mount images directory for serving thumbnails
 app.mount("/images", StaticFiles(directory=settings.IMAGE_OUTPUT_DIR, check_dir=False), name="output_images")
