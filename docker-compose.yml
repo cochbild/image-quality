@@ -1,0 +1,36 @@
+services:
+  iqa-backend:
+    build: ./backend
+    container_name: iqa-backend
+    ports:
+      - "${BACKEND_PORT:-8100}:8100"
+    environment:
+      - DATABASE_URL=postgresql://portal_user:${POSTGRES_PASSWORD}@portal-postgres:5432/portal_db
+      - LM_STUDIO_URL=${LM_STUDIO_URL:-http://host.docker.internal:1234/v1}
+      - HOMEHUB_API_URL=${HOMEHUB_API_URL:-http://portal-backend:8000/api/v1}
+      - IMAGE_INPUT_DIR=/app/images/input
+      - IMAGE_OUTPUT_DIR=/app/images/output
+      - IMAGE_REJECT_DIR=/app/images/reject
+    networks:
+      - portal-network
+    volumes:
+      - ${IMAGE_INPUT_DIR:-./.data/input}:/app/images/input:ro
+      - ${IMAGE_OUTPUT_DIR:-./.data/output}:/app/images/output:rw
+      - ${IMAGE_REJECT_DIR:-./.data/reject}:/app/images/reject:rw
+    restart: unless-stopped
+
+  iqa-frontend:
+    build: ./frontend
+    container_name: iqa-frontend
+    ports:
+      - "${FRONTEND_PORT:-5174}:80"
+    networks:
+      - portal-network
+    depends_on:
+      - iqa-backend
+    restart: unless-stopped
+
+networks:
+  portal-network:
+    external: true
+    name: portal-infra_portal-network
