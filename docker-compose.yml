@@ -5,9 +5,10 @@ services:
     ports:
       - "${BACKEND_PORT:-8100}:8100"
     environment:
-      - DATABASE_URL=postgresql://portal_user:${POSTGRES_PASSWORD}@portal-postgres:5432/portal_db
+      - DATABASE_URL=postgresql://portal_user:${POSTGRES_PASSWORD}@postgres:5432/portal_db
       - LM_STUDIO_URL=${LM_STUDIO_URL:-http://host.docker.internal:1234/v1}
-      - HOMEHUB_API_URL=${HOMEHUB_API_URL:-http://portal-backend:8000/api/v1}
+      - HOMEHUB_API_URL=${HOMEHUB_API_URL:-http://backend:8000/api/v1}
+      - IQA_EXTERNAL_URL=${IQA_EXTERNAL_URL:-http://localhost:5174}
       - IMAGE_INPUT_DIR=/app/images/input
       - IMAGE_OUTPUT_DIR=/app/images/output
       - IMAGE_REJECT_DIR=/app/images/reject

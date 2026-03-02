@@ -4,9 +4,10 @@ from typing import List
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://portal_user:portal_pass@portal-postgres:5432/portal_db"
-    LM_STUDIO_URL: str = "http://host.docker.internal:1234/v1"
-    HOMEHUB_API_URL: str = "http://portal-backend:8000/api/v1"
+    DATABASE_URL: str = "postgresql://portal_user:portal_pass@localhost:5432/portal_db"
+    LM_STUDIO_URL: str = "http://localhost:1234/v1"
+    HOMEHUB_API_URL: str = "http://localhost:8000/api/v1"
+    IQA_EXTERNAL_URL: str = "http://localhost:5174"
     API_V1_PREFIX: str = "/api/v1"
     CORS_ORIGINS: List[str] = [
         "http://localhost:5174",
