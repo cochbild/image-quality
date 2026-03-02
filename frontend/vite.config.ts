@@ -9,7 +9,8 @@ export default defineConfig({
     assetsDir: 'assets',
   },
   server: {
-    port: 5174,
+    port: 5180,
+    strictPort: true,
     host: '0.0.0.0',
     proxy: {
       '/api': {

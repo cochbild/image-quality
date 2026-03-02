@@ -91,7 +91,7 @@ def register_with_homehub():
                 "version": "1.0.0",
                 "ports": [
                     {"port": 8100, "protocol": "HTTP", "purpose": "IQA Backend API", "mode": "both"},
-                    {"port": 5174, "protocol": "HTTP", "purpose": "IQA Frontend", "mode": "both"},
+                    {"port": 5180, "protocol": "HTTP", "purpose": "IQA Frontend", "mode": "both"},
                 ],
             },
             timeout=10.0,

@@ -7,10 +7,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://portal_user:portal_pass@localhost:5432/portal_db"
     LM_STUDIO_URL: str = "http://localhost:1234/v1"
     HOMEHUB_API_URL: str = "http://localhost:8000/api/v1"
-    IQA_EXTERNAL_URL: str = "http://localhost:5174"
+    IQA_EXTERNAL_URL: str = "http://localhost:5180"
     API_V1_PREFIX: str = "/api/v1"
     CORS_ORIGINS: List[str] = [
-        "http://localhost:5174",
+        "http://localhost:5180",
         "http://localhost:8100",
     ]
     IMAGE_INPUT_DIR: str = "/app/images/input"

@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init)",
+      "Bash(git remote add origin https://github.com/cochbild/image-quality.git)",
+      "Bash(git add docs/plans/2026-02-28-image-quality-assessor-design.md)",
+      "Bash(git commit:*)",
+      "Bash(git add docs/plans/2026-02-28-image-quality-implementation-plan.md)",
+      "Bash(git push -u origin main)",
+      "Bash(git:*)",
+      "Bash(gh api:*)",
+      "Bash(mkdir:*)",
+      "Bash(gh pr:*)",
+      "Bash(npm install:*)",
+      "Bash(pip install:*)",
+      "Bash(npm run:*)",
+      "Bash(timeout 10 uvicorn app.main:app:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker exec:*)",
+      "Bash(timeout 8 bash:*)",
+      "Bash(xargs grep:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(timeout 10 bash:*)",
+      "Bash(uvicorn app.main:app:*)",
+      "Bash(netstat:*)",
+      "Bash(tasklist:*)",
+      "Bash(WMIC PROCESS:*)",
+      "Bash(timeout 12 do sleep:*)"
+    ]
+  }
+}
