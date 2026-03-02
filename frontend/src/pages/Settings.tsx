@@ -54,7 +54,7 @@ export default function Settings() {
         setSettings(settingsData);
         setLmStatus(statusData);
         if (statusData.connected) {
-          const modelsData = await getLMStudioModels();
+          const modelsData = await getLMStudioModels(true);
           setModels(modelsData);
         }
       } catch {
@@ -116,23 +116,46 @@ export default function Settings() {
           <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
             <TextField
               label="LM Studio URL"
-              value={settings.lm_studio_url || ''}
+              value={settings.lm_studio_url || 'http://localhost:1234'}
               onChange={(e) => handleChange('lm_studio_url', e.target.value)}
+              placeholder="http://localhost:1234"
               fullWidth
+              helperText="Default: http://localhost:1234"
             />
           </Box>
           <FormControl fullWidth>
-            <InputLabel>Model</InputLabel>
+            <InputLabel>Vision Model</InputLabel>
             <Select
               value={settings.lm_studio_model || ''}
-              label="Model"
+              label="Vision Model"
               onChange={(e) => handleChange('lm_studio_model', e.target.value)}
+              disabled={!lmStatus?.connected}
             >
-              <MenuItem value="">Auto-detect (first available)</MenuItem>
+              <MenuItem value="">Auto-detect (first vision model)</MenuItem>
               {models.map((m) => (
-                <MenuItem key={m.id} value={m.id}>{m.id}</MenuItem>
+                <MenuItem key={m.id} value={m.id}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <span>{m.id}</span>
+                    {m.state === 'loaded' && (
+                      <Chip label="loaded" size="small" color="success" variant="outlined" sx={{ height: 20 }} />
+                    )}
+                    {m.quantization && (
+                      <Chip label={m.quantization} size="small" variant="outlined" sx={{ height: 20 }} />
+                    )}
+                  </Box>
+                </MenuItem>
               ))}
             </Select>
+            {lmStatus?.connected && models.length === 0 && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                No vision models found. Load a VLM (e.g. Qwen-VL, Gemma-VL) in LM Studio.
+              </Typography>
+            )}
+            {!lmStatus?.connected && (
+              <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                Connect to LM Studio to select a model.
+              </Typography>
+            )}
           </FormControl>
         </CardContent>
       </Card>

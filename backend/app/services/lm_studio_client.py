@@ -12,11 +12,28 @@ class LMStudioClient:
     def __init__(self, base_url: Optional[str] = None):
         self.base_url = (base_url or settings.LM_STUDIO_URL).rstrip("/")
 
-    async def list_models(self) -> list[dict]:
+    async def list_models(self, vision_only: bool = False) -> list[dict]:
+        """List available models. Uses LM Studio native API for richer metadata when available."""
         async with httpx.AsyncClient(timeout=10.0) as client:
+            # Try LM Studio native API first (has type field: vlm vs llm)
+            native_url = self.base_url.replace("/v1", "/api/v0") + "/models"
+            try:
+                resp = await client.get(native_url)
+                if resp.status_code == 200:
+                    models = resp.json().get("data", [])
+                    if vision_only:
+                        models = [m for m in models if m.get("type") == "vlm"]
+                    return models
+            except Exception:
+                pass
+            # Fall back to OpenAI-compatible endpoint
             resp = await client.get(f"{self.base_url}/models")
             resp.raise_for_status()
-            return resp.json().get("data", [])
+            models = resp.json().get("data", [])
+            if vision_only:
+                vision_keywords = {"vl", "vision", "visual"}
+                models = [m for m in models if any(kw in m["id"].lower() for kw in vision_keywords)]
+            return models
 
     async def analyze_image(self, image_path: str, prompt: str, model: Optional[str] = None) -> str:
         path = Path(image_path)
@@ -55,6 +72,13 @@ class LMStudioClient:
             return data["choices"][0]["message"]["content"]
 
     async def _get_default_model(self) -> str:
+        # Prefer vision models for image analysis
+        vision_models = await self.list_models(vision_only=True)
+        if vision_models:
+            # Prefer a loaded model
+            loaded = [m for m in vision_models if m.get("state") == "loaded"]
+            return loaded[0]["id"] if loaded else vision_models[0]["id"]
+        # Fall back to any model
         models = await self.list_models()
         if not models:
             raise RuntimeError("No models loaded in LM Studio")

@@ -22,6 +22,11 @@ export interface LMStudioStatus {
 export interface LMStudioModel {
   id: string;
   object: string;
+  type?: string;
+  arch?: string;
+  state?: string;
+  quantization?: string;
+  publisher?: string;
 }
 
 export async function getLMStudioStatus(): Promise<LMStudioStatus> {
@@ -29,7 +34,7 @@ export async function getLMStudioStatus(): Promise<LMStudioStatus> {
   return data;
 }
 
-export async function getLMStudioModels(): Promise<LMStudioModel[]> {
-  const { data } = await apiClient.get('/lm-studio/models');
+export async function getLMStudioModels(visionOnly = false): Promise<LMStudioModel[]> {
+  const { data } = await apiClient.get('/lm-studio/models', { params: { vision_only: visionOnly } });
   return data.models || [];
 }
