@@ -1,6 +1,20 @@
+import os
+import sys
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import List
+
+
+def _default_data_dir() -> Path:
+    """Use a sensible default data directory based on platform."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("USERPROFILE", "C:\\Users\\Public"))
+        return base / "Pictures" / "IQA"
+    return Path("/app/images")
+
+
+_DATA = _default_data_dir()
 
 
 class Settings(BaseSettings):
@@ -13,9 +27,9 @@ class Settings(BaseSettings):
         "http://localhost:5180",
         "http://localhost:8100",
     ]
-    IMAGE_INPUT_DIR: str = "/app/images/input"
-    IMAGE_OUTPUT_DIR: str = "/app/images/output"
-    IMAGE_REJECT_DIR: str = "/app/images/reject"
+    IMAGE_INPUT_DIR: str = str(_DATA / "input")
+    IMAGE_OUTPUT_DIR: str = str(_DATA / "output")
+    IMAGE_REJECT_DIR: str = str(_DATA / "reject")
     LOG_LEVEL: str = "INFO"
 
     @field_validator('CORS_ORIGINS', mode='after')

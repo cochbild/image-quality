@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import {
   Container, Typography, Card, CardContent, TextField, Button, Box,
   Slider, Select, MenuItem, Chip, Divider, Snackbar, Alert,
-  CircularProgress, InputLabel, FormControl,
+  CircularProgress, InputLabel, FormControl, InputAdornment, IconButton,
 } from '@mui/material';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import {
   getAllSettings, updateSetting,
   getLMStudioStatus, getLMStudioModels,
   type LMStudioStatus, type LMStudioModel,
 } from '../api/settings';
+import FolderPicker from '../components/FolderPicker';
 
 const CATEGORIES = [
   { key: 'anatomical', label: 'Anatomical Integrity' },
@@ -28,6 +30,19 @@ export default function Settings() {
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false, message: '', severity: 'success',
   });
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [folderPickerTarget, setFolderPickerTarget] = useState('');
+  const [folderPickerTitle, setFolderPickerTitle] = useState('Select Folder');
+
+  const openFolderPicker = (settingKey: string, title: string) => {
+    setFolderPickerTarget(settingKey);
+    setFolderPickerTitle(title);
+    setFolderPickerOpen(true);
+  };
+
+  const handleFolderSelect = (path: string) => {
+    handleChange(folderPickerTarget, path);
+  };
 
   useEffect(() => {
     async function load() {
@@ -132,18 +147,51 @@ export default function Settings() {
               value={settings.input_dir || ''}
               onChange={(e) => handleChange('input_dir', e.target.value)}
               fullWidth
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => openFolderPicker('input_dir', 'Select Input Directory')}>
+                        <FolderOpenIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
             <TextField
               label="Output Directory (passed images)"
               value={settings.output_dir || ''}
               onChange={(e) => handleChange('output_dir', e.target.value)}
               fullWidth
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => openFolderPicker('output_dir', 'Select Output Directory')}>
+                        <FolderOpenIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
             <TextField
               label="Reject Directory (failed images)"
               value={settings.reject_dir || ''}
               onChange={(e) => handleChange('reject_dir', e.target.value)}
               fullWidth
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => openFolderPicker('reject_dir', 'Select Reject Directory')}>
+                        <FolderOpenIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
           </Box>
         </CardContent>
@@ -228,6 +276,14 @@ export default function Settings() {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      <FolderPicker
+        open={folderPickerOpen}
+        onClose={() => setFolderPickerOpen(false)}
+        onSelect={handleFolderSelect}
+        currentPath={settings[folderPickerTarget] || ''}
+        title={folderPickerTitle}
+      />
     </Container>
   );
 }
