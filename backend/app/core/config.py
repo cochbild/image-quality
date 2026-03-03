@@ -20,6 +20,7 @@ _DATA = _default_data_dir()
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://portal_user:portal_pass@localhost:5432/portal_db"
     LM_STUDIO_URL: str = "http://localhost:1234/v1"
+    LM_STUDIO_MODEL: str = "qwen/qwen3-vl-8b"
     HOMEHUB_API_URL: str = "http://localhost:8000/api/v1"
     IQA_EXTERNAL_URL: str = "http://localhost:5180"
     API_V1_PREFIX: str = "/api/v1"

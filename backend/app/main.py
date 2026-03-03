@@ -53,7 +53,7 @@ def seed_default_settings():
     try:
         defaults = {
             "lm_studio_url": settings.LM_STUDIO_URL,
-            "lm_studio_model": "",
+            "lm_studio_model": settings.LM_STUDIO_MODEL,
             "input_dir": settings.IMAGE_INPUT_DIR,
             "output_dir": settings.IMAGE_OUTPUT_DIR,
             "reject_dir": settings.IMAGE_REJECT_DIR,
