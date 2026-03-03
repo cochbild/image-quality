@@ -82,7 +82,10 @@ class AssessmentEngine:
             cat_data = triage_result.get(cat, {})
             score = int(cat_data.get("score", 1))
             reasoning = cat_data.get("reasoning", "")
-            categories[cat] = {"score": score, "reasoning": reasoning, "was_deep_dive": False}
+            # Model may return list instead of string — normalize
+            if isinstance(reasoning, list):
+                reasoning = "; ".join(str(r) for r in reasoning)
+            categories[cat] = {"score": score, "reasoning": str(reasoning), "was_deep_dive": False}
 
         # Phase 2: Deep dive on borderline categories
         borderline_cats = [
@@ -96,9 +99,12 @@ class AssessmentEngine:
                 prompt = DEEP_DIVE_PROMPTS[cat]
                 deep_response = await self.lm_client.analyze_image(image_path, prompt, model=model)
                 deep_result = parse_json_response(deep_response)
+                deep_reasoning = deep_result.get("reasoning", categories[cat]["reasoning"])
+                if isinstance(deep_reasoning, list):
+                    deep_reasoning = "; ".join(str(r) for r in deep_reasoning)
                 categories[cat] = {
                     "score": int(deep_result.get("score", categories[cat]["score"])),
-                    "reasoning": deep_result.get("reasoning", categories[cat]["reasoning"]),
+                    "reasoning": str(deep_reasoning),
                     "was_deep_dive": True,
                 }
 

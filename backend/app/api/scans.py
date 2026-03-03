@@ -123,6 +123,13 @@ async def _run_scan(scan_id: int, input_dir: str, output_dir: str, reject_dir: s
                 db.commit()
             except Exception as e:
                 logger.error(f"Failed to assess {image_path.name}: {e}")
+                # Rollback any pending DB errors before continuing
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                # Re-fetch scan after rollback
+                scan = db.query(Scan).filter(Scan.id == scan_id).first()
                 # Move to reject dir and record failed assessment
                 try:
                     dest = move_image(str(image_path), reject_dir)
