@@ -10,7 +10,11 @@ logger = get_logger("lm_studio")
 
 class LMStudioClient:
     def __init__(self, base_url: Optional[str] = None):
-        self.base_url = (base_url or settings.LM_STUDIO_URL).rstrip("/")
+        url = (base_url or settings.LM_STUDIO_URL).rstrip("/")
+        # Ensure URL ends with /v1 for OpenAI-compatible endpoint
+        if not url.endswith("/v1"):
+            url = url + "/v1"
+        self.base_url = url
 
     async def list_models(self, vision_only: bool = False) -> list[dict]:
         """List available models. Uses LM Studio native API for richer metadata when available."""

@@ -116,11 +116,11 @@ export default function Settings() {
           <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
             <TextField
               label="LM Studio URL"
-              value={settings.lm_studio_url || 'http://localhost:1234'}
+              value={settings.lm_studio_url || 'http://localhost:1234/v1'}
               onChange={(e) => handleChange('lm_studio_url', e.target.value)}
-              placeholder="http://localhost:1234"
+              placeholder="http://localhost:1234/v1"
               fullWidth
-              helperText="Default: http://localhost:1234"
+              helperText="OpenAI-compatible endpoint (e.g. http://localhost:1234/v1)"
             />
           </Box>
           <FormControl fullWidth>
