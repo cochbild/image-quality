@@ -12,28 +12,39 @@ logger = get_logger("assessment")
 
 
 def parse_json_response(text: str) -> dict:
-    """Extract JSON from model response, handling markdown code blocks."""
+    """Extract JSON from model response, handling thinking tags and markdown code blocks."""
+    # Strip thinking tags (Qwen3-VL and other thinking models wrap output in <think>...</think>)
+    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text).strip()
+    if not cleaned:
+        cleaned = text  # Fall back to original if stripping removed everything
+
     # Try direct parse first
     try:
-        return json.loads(text)
+        return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
     # Try extracting from markdown code block
-    match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+    match = re.search(r'```(?:json)?\s*([\s\S]*?)```', cleaned)
     if match:
         try:
             return json.loads(match.group(1))
         except json.JSONDecodeError:
             pass
-    # Try finding first { to last }
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1:
-        try:
-            return json.loads(text[start:end + 1])
-        except json.JSONDecodeError:
-            pass
-    raise ValueError(f"Could not parse JSON from response: {text[:200]}")
+    # Try finding first { to last } — handle nested braces by finding the outermost pair
+    start = cleaned.find("{")
+    if start != -1:
+        depth = 0
+        for i in range(start, len(cleaned)):
+            if cleaned[i] == "{":
+                depth += 1
+            elif cleaned[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(cleaned[start:i + 1])
+                    except json.JSONDecodeError:
+                        break
+    raise ValueError(f"Could not parse JSON from response: {cleaned[:300]}")
 
 
 class AssessmentEngine:

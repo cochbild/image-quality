@@ -1,11 +1,16 @@
 import base64
+import io
 import httpx
 from pathlib import Path
 from typing import Optional
+from PIL import Image
 from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger("lm_studio")
+
+# Max dimension for images sent to the model (keeps payload manageable for local LLMs)
+MAX_IMAGE_DIMENSION = 768
 
 
 class LMStudioClient:
@@ -44,11 +49,22 @@ class LMStudioClient:
         if not path.exists():
             raise FileNotFoundError(f"Image not found: {image_path}")
 
-        suffix = path.suffix.lower().lstrip(".")
-        mime_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp", "gif": "gif"}
-        mime_type = f"image/{mime_map.get(suffix, suffix)}"
+        # Resize large images to avoid context length overflow (400 errors)
+        img = Image.open(path)
+        w, h = img.size
+        if max(w, h) > MAX_IMAGE_DIMENSION:
+            ratio = MAX_IMAGE_DIMENSION / max(w, h)
+            new_size = (int(w * ratio), int(h * ratio))
+            img = img.resize(new_size, Image.LANCZOS)
+            logger.info(f"Resized {path.name} from {w}x{h} to {new_size[0]}x{new_size[1]}")
 
-        image_data = base64.b64encode(path.read_bytes()).decode("utf-8")
+        # Encode as JPEG for smaller base64 payload
+        buf = io.BytesIO()
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.save(buf, format="JPEG", quality=85)
+        image_data = base64.b64encode(buf.getvalue()).decode("utf-8")
+        mime_type = "image/jpeg"
 
         # Resolve model: parameter > DB setting > first available
         if not model:

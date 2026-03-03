@@ -12,12 +12,16 @@ DEFAULT_THRESHOLDS = {
 BORDERLINE_LOW = 4
 BORDERLINE_HIGH = 8
 
-TRIAGE_PROMPT = """You are an expert image quality assessor specializing in AI-generated (text-to-image) artwork. Analyze this image for common t2i defects.
+TRIAGE_PROMPT = """You are a harsh, unforgiving image quality assessor specializing in detecting defects in AI-generated (text-to-image) artwork. Your job is to FIND FLAWS, not praise images. A score of 10 should be extremely rare.
 
-Score each category from 1 (worst) to 10 (best). Be strict and precise.
+CRITICAL RULES:
+- ALWAYS count fingers on EVERY visible hand. Humans have EXACTLY 5 fingers per hand. Any deviation (extra, missing, fused, or unclear fingers) means the ANATOMICAL score MUST be 6 or below.
+- Do NOT assume correctness. VERIFY every detail you score.
+- When in doubt, score LOWER not higher. False negatives are better than false positives.
 
-Categories:
-1. ANATOMICAL - Human body accuracy: correct finger count (5 per hand), face symmetry, proper limb count, no merged bodies, correct joint articulation, proper feet/toes
+Score each category from 1 (worst) to 10 (best):
+
+1. ANATOMICAL - Human body accuracy: COUNT every finger on every hand (must be exactly 5 per hand), check face symmetry, proper limb count, no merged bodies, correct joint articulation, proper feet/toes. Even ONE hand with wrong finger count = score 6 or below.
 2. COMPOSITIONAL - Scene structure: object scale consistency, perspective coherence, no floating objects, no object merging/fusion
 3. PHYSICS - Physical plausibility: shadow direction consistency, shadow presence, reflection accuracy, depth-of-field consistency, gravity logic
 4. TEXTURE - Surface quality: skin realism (not waxy/plastic), hair quality, fabric integrity, material consistency, no edge bleeding
@@ -26,35 +30,28 @@ Categories:
 
 If NO humans are present in the image, score ANATOMICAL as 10.
 
-Respond ONLY with valid JSON in this exact format, no other text:
-{
-  "anatomical": {"score": <1-10>, "reasoning": "<brief explanation>"},
-  "compositional": {"score": <1-10>, "reasoning": "<brief explanation>"},
-  "physics": {"score": <1-10>, "reasoning": "<brief explanation>"},
-  "texture": {"score": <1-10>, "reasoning": "<brief explanation>"},
-  "technical": {"score": <1-10>, "reasoning": "<brief explanation>"},
-  "semantic": {"score": <1-10>, "reasoning": "<brief explanation>"}
-}"""
+Do NOT include any thinking, explanation, or preamble. Respond ONLY with valid JSON:
+{"anatomical": {"score": <1-10>, "reasoning": "<brief explanation>"}, "compositional": {"score": <1-10>, "reasoning": "<brief explanation>"}, "physics": {"score": <1-10>, "reasoning": "<brief explanation>"}, "texture": {"score": <1-10>, "reasoning": "<brief explanation>"}, "technical": {"score": <1-10>, "reasoning": "<brief explanation>"}, "semantic": {"score": <1-10>, "reasoning": "<brief explanation>"}}"""
 
 DEEP_DIVE_PROMPTS = {
-    "anatomical": """You are an expert anatomist reviewing an AI-generated image for human body defects. Examine EVERY detail carefully.
+    "anatomical": """You are a ruthlessly precise anatomist reviewing an AI-generated image. Your job is to FIND DEFECTS.
 
-Check systematically:
-HANDS: Count fingers on each visible hand. Are there exactly 5? Check thumb placement (correct side?). Check finger proportions, joint bending direction, nail placement. Are any fingers fused or merged?
-FACE: Are eyes symmetric and at the same height? Correct pupil shapes? Mouth/teeth intact? Ears present and correctly placed? Nose bridge intact? Skin texture natural (not waxy)?
-BODY: Count all limbs. Are any bodies merged together? Do all joints bend in anatomically possible directions? Are proportions correct (head-to-body ratio, arm length vs torso, etc.)?
-FEET: If visible, correct toe count? No fused feet? Proper orientation?
+MANDATORY CHECKS (do each one explicitly):
+HANDS: For EACH visible hand, COUNT the fingers one by one (thumb, index, middle, ring, pinky). State the count. If ANY hand has more or fewer than 5 fingers, or if fingers are fused, merged, or ambiguous, the score MUST be 6 or below. This is non-negotiable.
+FACE: Are eyes symmetric and at the same height? Correct pupil shapes? Mouth/teeth intact? Ears present and correctly placed? Natural proportions?
+BODY: Count all limbs. Any bodies merged together? Joints bending in impossible directions? Head-to-body ratio correct?
+FEET: If visible, correct toe count? No fused feet?
 
 If NO humans are present, score 10.
 
-Score 1-10 where:
-- 10: Flawless anatomy
-- 7-9: Minor imperfections (slight asymmetry, minor proportion issues)
-- 4-6: Noticeable defects (extra/missing finger, mild face distortion)
+Scoring:
+- 10: Every hand has exactly 5 well-formed fingers, face is perfect, all anatomy flawless (extremely rare)
+- 7-9: All finger counts correct but minor proportion/symmetry issues
+- 4-6: One or more hands with wrong finger count, OR mild face distortion
 - 1-3: Severe deformations (merged bodies, extra limbs, melted features)
 
-Respond ONLY with valid JSON:
-{"score": <1-10>, "reasoning": "<detailed explanation of findings>"}""",
+Do NOT include any thinking or preamble. Respond ONLY with valid JSON:
+{"score": <1-10>, "reasoning": "<list each hand's finger count and other findings>"}""",
 
     "compositional": """You are an expert compositor reviewing an AI-generated image for structural defects.
 

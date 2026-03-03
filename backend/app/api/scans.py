@@ -1,3 +1,4 @@
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -122,11 +123,17 @@ async def _run_scan(scan_id: int, input_dir: str, output_dir: str, reject_dir: s
                 db.commit()
             except Exception as e:
                 logger.error(f"Failed to assess {image_path.name}: {e}")
-                # Record failed assessment
+                # Move to reject dir and record failed assessment
+                try:
+                    dest = move_image(str(image_path), reject_dir)
+                except Exception as move_err:
+                    logger.error(f"Failed to move {image_path.name} to reject: {move_err}")
+                    dest = None
                 assessment = Assessment(
                     scan_id=scan_id,
                     filename=image_path.name,
                     file_path=str(image_path),
+                    destination_path=dest,
                     passed=False,
                 )
                 db.add(assessment)
@@ -164,6 +171,19 @@ async def start_scan(body: ScanRequest, background_tasks: BackgroundTasks, db: S
         raise HTTPException(status_code=400, detail=f"Input directory not found: {input_dir}")
     if not images:
         raise HTTPException(status_code=400, detail=f"No images found in: {input_dir}")
+
+    # Validate output/reject dirs are not the same as input dir
+    input_resolved = Path(input_dir).resolve()
+    output_resolved = Path(output_dir).resolve()
+    reject_resolved = Path(reject_dir).resolve()
+    if output_resolved == input_resolved:
+        raise HTTPException(status_code=400, detail="Output directory must be different from input directory")
+    if reject_resolved == input_resolved:
+        raise HTTPException(status_code=400, detail="Reject directory must be different from input directory")
+
+    # Create output/reject dirs if they don't exist
+    output_resolved.mkdir(parents=True, exist_ok=True)
+    reject_resolved.mkdir(parents=True, exist_ok=True)
 
     scan = Scan(input_dir=input_dir, output_dir=output_dir, reject_dir=reject_dir, total_images=len(images))
     db.add(scan)
