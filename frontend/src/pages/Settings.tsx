@@ -57,7 +57,8 @@ export default function Settings() {
           const modelsData = await getLMStudioModels(true);
           setModels(modelsData);
         }
-      } catch {
+      } catch (err) {
+        console.error('Settings load failed', err);
         setSnackbar({ open: true, message: 'Failed to load settings', severity: 'error' });
       } finally {
         setLoading(false);
@@ -73,13 +74,25 @@ export default function Settings() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const promises = Object.entries(settings).map(([key, value]) =>
-        updateSetting(key, value)
+      const entries = Object.entries(settings);
+      const results = await Promise.allSettled(
+        entries.map(([key, value]) => updateSetting(key, value)),
       );
-      await Promise.all(promises);
-      setSnackbar({ open: true, message: 'Settings saved successfully', severity: 'success' });
-    } catch {
-      setSnackbar({ open: true, message: 'Failed to save settings', severity: 'error' });
+      const failures = results
+        .map((r, i) => ({ r, key: entries[i][0] }))
+        .filter(({ r }) => r.status === 'rejected');
+      if (failures.length) {
+        failures.forEach(({ r, key }) => {
+          if (r.status === 'rejected') console.error(`Settings save failed for ${key}`, r.reason);
+        });
+        setSnackbar({
+          open: true,
+          message: `Failed to save: ${failures.map((f) => f.key).join(', ')}`,
+          severity: 'error',
+        });
+      } else {
+        setSnackbar({ open: true, message: 'Settings saved successfully', severity: 'success' });
+      }
     } finally {
       setSaving(false);
     }

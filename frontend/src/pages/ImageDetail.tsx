@@ -24,9 +24,18 @@ export default function ImageDetail() {
 
   useEffect(() => {
     if (!id) return;
-    getAssessment(parseInt(id))
+    const parsedId = Number(id);
+    if (!Number.isFinite(parsedId) || parsedId <= 0) {
+      setError(`Invalid assessment id: ${id}`);
+      setLoading(false);
+      return;
+    }
+    getAssessment(parsedId)
       .then(setAssessment)
-      .catch(() => setError('Failed to load assessment'))
+      .catch((err) => {
+        console.error('Assessment load failed', err);
+        setError('Failed to load assessment');
+      })
       .finally(() => setLoading(false));
   }, [id]);
 

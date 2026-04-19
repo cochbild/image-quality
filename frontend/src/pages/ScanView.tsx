@@ -35,7 +35,7 @@ export default function ScanView() {
         setInputDir(s.input_dir || '');
         setOutputDir(s.output_dir || '');
         setRejectDir(s.reject_dir || '');
-      }).catch(() => {});
+      }).catch((err) => console.error('Failed to load default directories', err));
     }
   }, [scanId]);
 
@@ -43,44 +43,60 @@ export default function ScanView() {
   useEffect(() => {
     if (!scanId) return;
 
-    const loadScan = async () => {
-      try {
-        const [scanData, assessData] = await Promise.all([
-          getScan(parseInt(scanId)),
-          getAssessmentsByScan(parseInt(scanId)),
-        ]);
-        setScan(scanData);
-        setAssessments(assessData);
+    const parsedId = Number(scanId);
+    if (!Number.isFinite(parsedId) || parsedId <= 0) {
+      setError(`Invalid scan id: ${scanId}`);
+      setLoading(false);
+      return;
+    }
 
-        if (scanData.status === 'running') {
-          if (!pollRef.current) {
-            pollRef.current = setInterval(async () => {
-              try {
-                const [s, a] = await Promise.all([
-                  getScan(parseInt(scanId)),
-                  getAssessmentsByScan(parseInt(scanId)),
-                ]);
-                setScan(s);
-                setAssessments(a);
-                if (s.status !== 'running' && pollRef.current) {
-                  clearInterval(pollRef.current);
-                  pollRef.current = null;
-                }
-              } catch { /* ignore poll errors */ }
-            }, 3000);
-          }
-        }
-      } catch {
-        setError('Failed to load scan data');
-      } finally {
-        setLoading(false);
-      }
+    // `cancelled` gates any state write after an effect teardown, preventing
+    // a slow initial fetch from scheduling a poll after a new scanId has
+    // already started its own effect run.
+    let cancelled = false;
+
+    const fetchOnce = async () => {
+      const [s, a] = await Promise.all([
+        getScan(parsedId),
+        getAssessmentsByScan(parsedId),
+      ]);
+      if (cancelled) return null;
+      setScan(s);
+      setAssessments(a);
+      return s;
     };
 
     setLoading(true);
-    loadScan();
+    setError(null);
+
+    fetchOnce()
+      .then((s) => {
+        if (cancelled || !s) return;
+        if (s.status === 'running' && !pollRef.current) {
+          pollRef.current = setInterval(() => {
+            fetchOnce()
+              .then((next) => {
+                if (cancelled) return;
+                if (next && next.status !== 'running' && pollRef.current) {
+                  clearInterval(pollRef.current);
+                  pollRef.current = null;
+                }
+              })
+              .catch((err) => console.error('Poll failed', err));
+          }, 3000);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('Failed to load scan', err);
+        setError('Failed to load scan data');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => {
+      cancelled = true;
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;

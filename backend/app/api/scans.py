@@ -1,26 +1,24 @@
-from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import desc
+from sqlalchemy.orm import Session
+
 from app.core.config import settings as app_settings
 from app.core.logging import get_logger
 from app.core.paths import safe_resolve
-from app.db.session import get_db
-from app.db.models.scan import Scan
 from app.db.models.assessment import Assessment, CategoryScore
+from app.db.models.scan import Scan
 from app.db.models.setting import Setting
+from app.db.session import get_db
 from app.services.assessment_engine import AssessmentEngine
 from app.services.file_manager import list_images, move_image
-from app.services.rubric import DEFAULT_THRESHOLDS, BORDERLINE_LOW, BORDERLINE_HIGH, CATEGORIES
+from app.services.rubric import BORDERLINE_HIGH, BORDERLINE_LOW, CATEGORIES, DEFAULT_THRESHOLDS
 
 logger = get_logger("scans_api")
 router = APIRouter()
-
-# Track active scans
-_active_scans: dict[int, bool] = {}  # scan_id -> should_continue
 
 
 class ScanRequest(BaseModel):
@@ -45,7 +43,7 @@ class ScanResponse(BaseModel):
         from_attributes = True
 
 
-def _get_setting(db: Session, key: str, default: str) -> str:
+def _get_setting(db: Session, key: str, default: str | None) -> str | None:
     setting = db.query(Setting).filter(Setting.key == key).first()
     return setting.value if setting else default
 
@@ -58,30 +56,39 @@ def _get_thresholds(db: Session) -> dict[str, int]:
     return thresholds
 
 
-async def _run_scan(scan_id: int, input_dir: str, output_dir: str, reject_dir: str):
-    """Background task that runs the actual assessment scan."""
+async def _run_scan(scan_id: int, input_dir: str, output_dir: str, reject_dir: str) -> None:
+    """Background task that runs the actual assessment scan.
+
+    Cancellation uses the DB-stored `scan.status == 'cancelling'` sentinel so
+    the signal survives process restarts and works across uvicorn workers —
+    the earlier in-memory dict only worked when the cancel request happened
+    to land on the same worker that was running the scan.
+    """
     from app.db.session import SessionLocal
+
     db = SessionLocal()
     try:
         images = list_images(input_dir)
         scan = db.query(Scan).filter(Scan.id == scan_id).first()
+        if scan is None:
+            return
         scan.total_images = len(images)
         db.commit()
 
         engine = AssessmentEngine()
-
         lm_url = _get_setting(db, "lm_studio_url", None)
         if lm_url:
             engine.lm_client.base_url = lm_url.rstrip("/")
-
         model = _get_setting(db, "lm_studio_model", None)
         thresholds = _get_thresholds(db)
-        bl_low = int(_get_setting(db, "borderline_low", str(BORDERLINE_LOW)))
-        bl_high = int(_get_setting(db, "borderline_high", str(BORDERLINE_HIGH)))
+        bl_low = int(_get_setting(db, "borderline_low", str(BORDERLINE_LOW)) or BORDERLINE_LOW)
+        bl_high = int(_get_setting(db, "borderline_high", str(BORDERLINE_HIGH)) or BORDERLINE_HIGH)
 
+        cancelled = False
         for image_path in images:
-            if not _active_scans.get(scan_id, True):
-                scan.status = "cancelled"
+            current_status = db.query(Scan.status).filter(Scan.id == scan_id).scalar()
+            if current_status == "cancelling":
+                cancelled = True
                 break
 
             try:
@@ -93,75 +100,86 @@ async def _run_scan(scan_id: int, input_dir: str, output_dir: str, reject_dir: s
                     model=model,
                 )
 
-                # Auto-sort
-                if result["passed"]:
-                    dest = move_image(str(image_path), output_dir)
-                    scan.passed_count += 1
-                else:
-                    dest = move_image(str(image_path), reject_dir)
-                    scan.failed_count += 1
-
-                # Store assessment
+                # Persist the assessment first so scoring survives even if the
+                # subsequent file move fails.
                 assessment = Assessment(
                     scan_id=scan_id,
                     filename=image_path.name,
                     file_path=str(image_path),
-                    destination_path=dest,
+                    destination_path=None,
                     passed=result["passed"],
                 )
                 db.add(assessment)
                 db.flush()
-
                 for cat, data in result["categories"].items():
-                    score = CategoryScore(
+                    db.add(CategoryScore(
                         assessment_id=assessment.id,
                         category=cat,
                         score=data["score"],
                         reasoning=data["reasoning"],
                         was_deep_dive=data["was_deep_dive"],
-                    )
-                    db.add(score)
-
+                    ))
+                if result["passed"]:
+                    scan.passed_count += 1
+                else:
+                    scan.failed_count += 1
                 db.commit()
+
+                # Now move the file; on failure the assessment still stands,
+                # just without a destination_path.
+                target_dir = output_dir if result["passed"] else reject_dir
+                try:
+                    assessment.destination_path = move_image(str(image_path), target_dir)
+                    db.commit()
+                except Exception as move_err:
+                    logger.error(f"Assessed but failed to move {image_path.name}: {move_err}")
+                    db.rollback()
+
             except Exception as e:
                 logger.error(f"Failed to assess {image_path.name}: {e}")
-                # Rollback any pending DB errors before continuing
                 try:
                     db.rollback()
                 except Exception:
                     pass
-                # Re-fetch scan after rollback
+                # Record a failed assessment so the UI can show the file;
+                # best-effort move to reject.
                 scan = db.query(Scan).filter(Scan.id == scan_id).first()
-                # Move to reject dir and record failed assessment
+                if scan is None:
+                    break
+                dest: str | None
                 try:
                     dest = move_image(str(image_path), reject_dir)
                 except Exception as move_err:
                     logger.error(f"Failed to move {image_path.name} to reject: {move_err}")
                     dest = None
-                assessment = Assessment(
+                db.add(Assessment(
                     scan_id=scan_id,
                     filename=image_path.name,
                     file_path=str(image_path),
                     destination_path=dest,
                     passed=False,
-                )
-                db.add(assessment)
+                ))
                 scan.failed_count += 1
                 db.commit()
 
-        scan.status = "completed" if scan.status != "cancelled" else "cancelled"
-        scan.completed_at = datetime.now(timezone.utc)
-        db.commit()
+        scan = db.query(Scan).filter(Scan.id == scan_id).first()
+        if scan:
+            scan.status = "cancelled" if cancelled else "completed"
+            scan.completed_at = datetime.now(timezone.utc)
+            db.commit()
 
     except Exception as e:
         logger.error(f"Scan {scan_id} failed: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         scan = db.query(Scan).filter(Scan.id == scan_id).first()
         if scan:
             scan.status = "failed"
             scan.completed_at = datetime.now(timezone.utc)
             db.commit()
     finally:
-        _active_scans.pop(scan_id, None)
         db.close()
 
 
@@ -171,7 +189,6 @@ async def start_scan(body: ScanRequest, background_tasks: BackgroundTasks, db: S
     output_raw = body.output_dir or _get_setting(db, "output_dir", app_settings.IMAGE_OUTPUT_DIR)
     reject_raw = body.reject_dir or _get_setting(db, "reject_dir", app_settings.IMAGE_REJECT_DIR)
 
-    # Every scan path must fall inside one of the env-defined image roots.
     roots = app_settings.allowed_image_roots()
     input_resolved = safe_resolve(input_raw, roots)
     output_resolved = safe_resolve(output_raw, roots)
@@ -198,16 +215,13 @@ async def start_scan(body: ScanRequest, background_tasks: BackgroundTasks, db: S
     db.commit()
     db.refresh(scan)
 
-    _active_scans[scan.id] = True
     background_tasks.add_task(_run_scan, scan.id, input_dir, output_dir, reject_dir)
-
     return scan
 
 
 @router.get("/", response_model=list[ScanResponse])
 async def list_scans(limit: int = 20, db: Session = Depends(get_db)):
-    scans = db.query(Scan).order_by(desc(Scan.started_at)).limit(limit).all()
-    return scans
+    return db.query(Scan).order_by(desc(Scan.started_at)).limit(limit).all()
 
 
 @router.get("/{scan_id}", response_model=ScanResponse)
@@ -219,8 +233,12 @@ async def get_scan(scan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{scan_id}/cancel")
-async def cancel_scan(scan_id: int):
-    if scan_id in _active_scans:
-        _active_scans[scan_id] = False
-        return {"message": "Scan cancellation requested"}
-    raise HTTPException(status_code=404, detail="No active scan with that ID")
+async def cancel_scan(scan_id: int, db: Session = Depends(get_db)):
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    if scan.status not in ("running", "cancelling"):
+        raise HTTPException(status_code=400, detail=f"Scan is {scan.status}, cannot cancel")
+    scan.status = "cancelling"
+    db.commit()
+    return {"message": "Scan cancellation requested"}

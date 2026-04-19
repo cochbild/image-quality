@@ -25,6 +25,7 @@ export default function Dashboard() {
         setStats(statsData);
         setScans(scansData);
       } catch (err) {
+        console.error('Dashboard load failed', err);
         setError('Failed to load dashboard data. Is the backend running?');
       } finally {
         setLoading(false);

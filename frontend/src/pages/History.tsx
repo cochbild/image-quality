@@ -16,7 +16,10 @@ export default function History() {
   useEffect(() => {
     getScans(50)
       .then(setScans)
-      .catch(() => setError('Failed to load scan history'))
+      .catch((err) => {
+        console.error('History load failed', err);
+        setError('Failed to load scan history');
+      })
       .finally(() => setLoading(false));
   }, []);
 
