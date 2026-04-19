@@ -13,7 +13,7 @@ IQA is a self-hosted web app that uses a vision-enabled LLM (e.g. Qwen VL via LM
 - Docker and Docker Compose
 - A running [LM Studio](https://lmstudio.ai/) instance serving a vision model (default: `qwen/qwen3-vl-8b`) on an OpenAI-compatible endpoint
 - PostgreSQL — either the HomeHub `portal-infra` stack, or your own instance (update `DATABASE_URL` to match)
-- For local dev without Docker: Python 3.11+ and Node.js 18+
+- For local dev without Docker: Python 3.11+, [uv](https://docs.astral.sh/uv/), Node.js 20+, and [pnpm](https://pnpm.io/) (enable via `corepack enable`)
 
 ### Installation
 
@@ -38,14 +38,13 @@ The frontend serves on `http://localhost:5180` and the backend API on `http://lo
 ```bash
 # Backend
 cd backend
-python -m venv .venv && source .venv/Scripts/activate  # Windows bash
-pip install -r requirements.txt
-uvicorn app.main:app --port 8100 --reload
+uv sync
+uv run uvicorn app.main:app --port 8100 --reload
 
 # Frontend (separate terminal)
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ## Features
