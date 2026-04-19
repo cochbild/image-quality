@@ -19,6 +19,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    // Split heavy vendor libs into their own long-lived chunks so changes to
+    // app code don't invalidate the cached vendor bundles.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          mui: ['@mui/material', '@mui/icons-material'],
+          emotion: ['@emotion/react', '@emotion/styled'],
+        },
+      },
+    },
   },
   server: {
     port: 5180,

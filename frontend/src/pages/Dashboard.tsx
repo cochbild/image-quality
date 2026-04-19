@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container, Grid, Card, CardContent, Typography, Button, Box,
-  Table, TableHead, TableBody, TableRow, TableCell,
-  CircularProgress, Alert, Chip,
+  CircularProgress, Alert,
 } from '@mui/material';
 import { getStats, type Stats } from '../api/assessments';
 import { getScans, type Scan } from '../api/scans';
+import ScanTable from '../components/ScanTable';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -84,47 +84,7 @@ export default function Dashboard() {
       {scans.length === 0 ? (
         <Alert severity="info">No scans yet. Start your first scan!</Alert>
       ) : (
-        <Card>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Date</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Total</TableCell>
-                <TableCell>Passed</TableCell>
-                <TableCell>Failed</TableCell>
-                <TableCell>Pass Rate</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {scans.map((scan) => (
-                <TableRow
-                  key={scan.id}
-                  hover
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/scan/${scan.id}`)}
-                >
-                  <TableCell>{new Date(scan.started_at).toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={scan.status}
-                      color={scan.status === 'completed' ? 'success' : scan.status === 'running' ? 'info' : 'default'}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>{scan.total_images}</TableCell>
-                  <TableCell>{scan.passed_count}</TableCell>
-                  <TableCell>{scan.failed_count}</TableCell>
-                  <TableCell>
-                    {scan.total_images > 0
-                      ? `${Math.round((scan.passed_count / scan.total_images) * 100)}%`
-                      : '-'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+        <ScanTable scans={scans} />
       )}
     </Container>
   );

@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
-  Container, Typography, Card, Table, TableHead, TableBody, TableRow, TableCell,
-  Chip, CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Box,
+  Container, Typography,
+  CircularProgress, Alert, FormControl, InputLabel, Select, MenuItem, Box,
 } from '@mui/material';
 import { getScans, type Scan } from '../api/scans';
+import ScanTable from '../components/ScanTable';
 
 export default function History() {
-  const navigate = useNavigate();
   const [scans, setScans] = useState<Scan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,54 +65,7 @@ export default function History() {
       {filtered.length === 0 ? (
         <Alert severity="info">No scans found.</Alert>
       ) : (
-        <Card>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Total</TableCell>
-                <TableCell>Passed</TableCell>
-                <TableCell>Failed</TableCell>
-                <TableCell>Pass Rate</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filtered.map((scan) => (
-                <TableRow
-                  key={scan.id}
-                  hover
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/scan/${scan.id}`)}
-                >
-                  <TableCell>#{scan.id}</TableCell>
-                  <TableCell>{new Date(scan.started_at).toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={scan.status}
-                      color={
-                        scan.status === 'completed' ? 'success'
-                        : scan.status === 'running' ? 'info'
-                        : scan.status === 'failed' ? 'error'
-                        : 'default'
-                      }
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>{scan.total_images}</TableCell>
-                  <TableCell>{scan.passed_count}</TableCell>
-                  <TableCell>{scan.failed_count}</TableCell>
-                  <TableCell>
-                    {scan.total_images > 0
-                      ? `${Math.round((scan.passed_count / scan.total_images) * 100)}%`
-                      : '-'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+        <ScanTable scans={filtered} showId />
       )}
     </Container>
   );
