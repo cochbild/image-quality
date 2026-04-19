@@ -8,9 +8,9 @@ from app.api import assessments, filesystem, health, images, scans, settings_api
 from app.core.auth import require_api_key
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.db.base import Base
+from app.db.migrations import apply_migrations
 from app.db.models import Setting
-from app.db.session import SessionLocal, engine, wait_for_database
+from app.db.session import SessionLocal, wait_for_database
 
 logger = get_logger("main")
 
@@ -109,8 +109,7 @@ def _recover_orphaned_scans() -> None:
 async def lifespan(_app: FastAPI):
     logger.info("Waiting for database connection...")
     wait_for_database()
-    logger.info("Creating IQA database tables...")
-    Base.metadata.create_all(bind=engine)
+    apply_migrations()
     _seed_default_settings()
     _recover_orphaned_scans()
     _register_with_homehub()
