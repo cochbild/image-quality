@@ -83,7 +83,7 @@ Please see [SECURITY.md](SECURITY.md) for the vulnerability reporting policy.
 
 ## License
 
-No license file is currently included. All rights reserved until one is added.
+MIT — see [LICENSE](LICENSE) for details.
 
 ## Contact
 
