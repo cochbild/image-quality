@@ -1,0 +1,35 @@
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Hashed asset bundles are immutable — cache them forever.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # index.html must always be re-fetched so clients pick up new bundle hashes.
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # All browser traffic to /api/ is proxied to the backend. The backend
+    # enforces a shared-secret API key that nginx injects here, so the key
+    # is never exposed to client JavaScript.
+    location /api/ {
+        proxy_pass http://iqa-backend:8100;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-API-Key "${IQA_API_KEY}";
+    }
+
+    # Baseline hardening headers for the static shell.
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "same-origin" always;
+}

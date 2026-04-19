@@ -24,25 +24,30 @@ cd image-quality
 
 # Configure environment
 cp .env.example .env
-# Edit .env — set POSTGRES_PASSWORD, LM_STUDIO_URL, and image directories
+# Edit .env — set POSTGRES_PASSWORD, LM_STUDIO_URL, image directories, and
+# generate an IQA_API_KEY (required):
+#   python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 # Build and run
 docker compose build
 docker compose up -d
 ```
 
-The frontend serves on `http://localhost:5180` and the backend API on `http://localhost:8100` by default.
+The frontend serves on `http://localhost:5180` and the backend API on `http://localhost:8100` by default. The backend rejects every request that is missing the matching `X-API-Key` header — nginx injects it for browser traffic, so the key never touches client-side JavaScript.
 
 ### Local Development
 
 ```bash
-# Backend
+# Backend — IQA_API_KEY and DATABASE_URL must be in backend/.env or the
+# shell environment; the server fails fast if either is missing.
 cd backend
 uv sync
 uv run uvicorn app.main:app --port 8100 --reload
 
-# Frontend (separate terminal)
+# Frontend (separate terminal) — export the same IQA_API_KEY so the
+# Vite dev proxy can inject it on outbound /api calls.
 cd frontend
+export IQA_API_KEY=...   # same value as the backend
 pnpm install
 pnpm dev
 ```

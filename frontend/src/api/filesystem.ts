@@ -1,6 +1,6 @@
 import apiClient from './client';
 
-export interface Drive {
+export interface Root {
   path: string;
   label: string;
 }
@@ -15,15 +15,14 @@ export interface BrowseResult {
   path: string;
   exists: boolean;
   is_dir?: boolean;
-  parent: string;
+  parent: string | null;
   entries: FsEntry[];
   image_count?: number;
-  error?: string;
 }
 
-export async function getDrives(): Promise<Drive[]> {
-  const { data } = await apiClient.get('/filesystem/drives');
-  return data.drives;
+export async function getRoots(): Promise<Root[]> {
+  const { data } = await apiClient.get('/filesystem/roots');
+  return data.roots;
 }
 
 export async function browseDirectory(path: string): Promise<BrowseResult> {

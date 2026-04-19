@@ -9,7 +9,7 @@ import FolderIcon from '@mui/icons-material/Folder';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ComputerIcon from '@mui/icons-material/Computer';
 import ImageIcon from '@mui/icons-material/Image';
-import { getDrives, browseDirectory, type Drive, type BrowseResult } from '../api/filesystem';
+import { getRoots, browseDirectory, type Root, type BrowseResult } from '../api/filesystem';
 
 interface FolderPickerProps {
   open: boolean;
@@ -20,19 +20,19 @@ interface FolderPickerProps {
 }
 
 export default function FolderPicker({ open, onClose, onSelect, currentPath, title = 'Select Folder' }: FolderPickerProps) {
-  const [drives, setDrives] = useState<Drive[]>([]);
+  const [roots, setRoots] = useState<Root[]>([]);
   const [browseResult, setBrowseResult] = useState<BrowseResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [manualPath, setManualPath] = useState(currentPath);
-  const [showDrives, setShowDrives] = useState(false);
+  const [showRoots, setShowRoots] = useState(false);
 
   useEffect(() => {
     if (open) {
-      getDrives().then(setDrives).catch(() => {});
+      getRoots().then(setRoots).catch((err) => console.error('Failed to load roots', err));
       if (currentPath) {
         navigateTo(currentPath);
       } else {
-        setShowDrives(true);
+        setShowRoots(true);
       }
       setManualPath(currentPath);
     }
@@ -40,14 +40,14 @@ export default function FolderPicker({ open, onClose, onSelect, currentPath, tit
 
   const navigateTo = async (path: string) => {
     setLoading(true);
-    setShowDrives(false);
+    setShowRoots(false);
     try {
       const result = await browseDirectory(path);
       setBrowseResult(result);
       setManualPath(result.path);
-    } catch {
-      // If browse fails, show drives
-      setShowDrives(true);
+    } catch (err) {
+      console.error('Browse failed, falling back to roots', err);
+      setShowRoots(true);
     } finally {
       setLoading(false);
     }
@@ -87,20 +87,20 @@ export default function FolderPicker({ open, onClose, onSelect, currentPath, tit
         </Box>
 
         {/* Breadcrumbs */}
-        {browseResult && !showDrives && (
+        {browseResult && !showRoots && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <Button
               size="small"
               startIcon={<ComputerIcon />}
-              onClick={() => setShowDrives(true)}
+              onClick={() => setShowRoots(true)}
             >
-              Drives
+              Roots
             </Button>
-            {browseResult.parent !== browseResult.path && (
+            {browseResult.parent && browseResult.parent !== browseResult.path && (
               <Button
                 size="small"
                 startIcon={<ArrowUpwardIcon />}
-                onClick={() => navigateTo(browseResult.parent)}
+                onClick={() => navigateTo(browseResult.parent!)}
               >
                 Up
               </Button>
@@ -137,12 +137,12 @@ export default function FolderPicker({ open, onClose, onSelect, currentPath, tit
 
         {loading ? (
           <Box sx={{ textAlign: 'center', py: 3 }}><CircularProgress /></Box>
-        ) : showDrives ? (
+        ) : showRoots ? (
           <List dense>
-            {drives.map((drive) => (
-              <ListItemButton key={drive.path} onClick={() => navigateTo(drive.path)}>
+            {roots.map((root) => (
+              <ListItemButton key={root.path} onClick={() => navigateTo(root.path)}>
                 <ListItemIcon><ComputerIcon /></ListItemIcon>
-                <ListItemText primary={drive.label} secondary={drive.path} />
+                <ListItemText primary={root.label} secondary={root.path} />
               </ListItemButton>
             ))}
           </List>
@@ -162,9 +162,6 @@ export default function FolderPicker({ open, onClose, onSelect, currentPath, tit
           </List>
         )}
 
-        {browseResult?.error && (
-          <Typography color="error" variant="body2">{browseResult.error}</Typography>
-        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>

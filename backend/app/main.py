@@ -1,54 +1,23 @@
+from contextlib import asynccontextmanager
+
 import httpx
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+
+from app.api import assessments, filesystem, health, images, scans, settings_api
+from app.core.auth import require_api_key
 from app.core.config import settings
-from app.api import scans, assessments, settings_api, health, images, filesystem
-from app.db.session import engine, wait_for_database, SessionLocal
-from app.db.base import Base
-from app.db.models import Scan, Assessment, CategoryScore, Setting
 from app.core.logging import get_logger
+from app.db.base import Base
+from app.db.models import Setting
+from app.db.session import SessionLocal, engine, wait_for_database
 
 logger = get_logger("main")
 
-# Wait for database
-logger.info("Waiting for database connection...")
-wait_for_database()
 
-# Create IQA tables
-logger.info("Creating IQA database tables...")
-Base.metadata.create_all(bind=engine)
-logger.info("IQA database tables created")
+def _seed_default_settings() -> None:
+    from app.services.rubric import BORDERLINE_HIGH, BORDERLINE_LOW, DEFAULT_THRESHOLDS
 
-app = FastAPI(
-    title="Image Quality Assessor API",
-    description="AI-powered quality assessment for t2i generated images",
-    version="1.0.0",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(health.router, prefix="/api/v1", tags=["health"])
-app.include_router(scans.router, prefix="/api/v1/scans", tags=["scans"])
-app.include_router(assessments.router, prefix="/api/v1/assessments", tags=["assessments"])
-app.include_router(settings_api.router, prefix="/api/v1/settings", tags=["settings"])
-app.include_router(images.router, prefix="/api/v1/images", tags=["images"])
-app.include_router(filesystem.router, prefix="/api/v1/filesystem", tags=["filesystem"])
-
-# Mount images directory for serving thumbnails
-app.mount("/images", StaticFiles(directory=settings.IMAGE_OUTPUT_DIR, check_dir=False), name="output_images")
-app.mount("/rejects", StaticFiles(directory=settings.IMAGE_REJECT_DIR, check_dir=False), name="reject_images")
-
-
-def seed_default_settings():
-    """Seed default settings on first startup."""
-    from app.services.rubric import DEFAULT_THRESHOLDS, BORDERLINE_LOW, BORDERLINE_HIGH
     db = SessionLocal()
     try:
         defaults = {
@@ -62,10 +31,8 @@ def seed_default_settings():
         }
         for cat, val in DEFAULT_THRESHOLDS.items():
             defaults[f"threshold_{cat}"] = str(val)
-
         for key, value in defaults.items():
-            existing = db.query(Setting).filter(Setting.key == key).first()
-            if not existing:
+            if not db.query(Setting).filter(Setting.key == key).first():
                 db.add(Setting(key=key, value=value))
         db.commit()
         logger.info("Default settings seeded")
@@ -76,8 +43,7 @@ def seed_default_settings():
         db.close()
 
 
-def register_with_homehub():
-    """Self-register with HomeHub portal on startup."""
+def _register_with_homehub() -> None:
     try:
         resp = httpx.post(
             f"{settings.HOMEHUB_API_URL}/apps/register",
@@ -120,8 +86,62 @@ def register_with_homehub():
         logger.warning(f"Could not register with HomeHub (may not be running): {e}")
 
 
-seed_default_settings()
-register_with_homehub()
+def _recover_orphaned_scans() -> None:
+    """Any scan stuck in `running` from a previous process is now stale."""
+    from datetime import datetime, timezone
+
+    from app.db.models.scan import Scan
+
+    db = SessionLocal()
+    try:
+        stuck = db.query(Scan).filter(Scan.status == "running").all()
+        for scan in stuck:
+            scan.status = "failed"
+            scan.completed_at = datetime.now(timezone.utc)
+        if stuck:
+            db.commit()
+            logger.warning(f"Marked {len(stuck)} orphaned scan(s) as failed on startup")
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    logger.info("Waiting for database connection...")
+    wait_for_database()
+    logger.info("Creating IQA database tables...")
+    Base.metadata.create_all(bind=engine)
+    _seed_default_settings()
+    _recover_orphaned_scans()
+    _register_with_homehub()
+    yield
+
+
+app = FastAPI(
+    title="Image Quality Assessor API",
+    description="AI-powered quality assessment for t2i generated images",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Health endpoints remain unauthenticated so container orchestrators can probe them.
+app.include_router(health.router, prefix="/api/v1", tags=["health"])
+
+# Every other router sits behind the shared-secret API key dependency.
+_protected = [Depends(require_api_key)]
+app.include_router(scans.router, prefix="/api/v1/scans", tags=["scans"], dependencies=_protected)
+app.include_router(assessments.router, prefix="/api/v1/assessments", tags=["assessments"], dependencies=_protected)
+app.include_router(settings_api.router, prefix="/api/v1/settings", tags=["settings"], dependencies=_protected)
+app.include_router(images.router, prefix="/api/v1/images", tags=["images"], dependencies=_protected)
+app.include_router(filesystem.router, prefix="/api/v1/filesystem", tags=["filesystem"], dependencies=_protected)
 
 
 @app.get("/")

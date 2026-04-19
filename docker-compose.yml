@@ -5,6 +5,7 @@ services:
     ports:
       - "${BACKEND_PORT:-8100}:8100"
     environment:
+      - IQA_API_KEY=${IQA_API_KEY}
       - DATABASE_URL=postgresql://portal_user:${POSTGRES_PASSWORD}@postgres:5432/portal_db
       - LM_STUDIO_URL=${LM_STUDIO_URL:-http://host.docker.internal:1234/v1}
       - HOMEHUB_API_URL=${HOMEHUB_API_URL:-http://backend:8000/api/v1}
@@ -25,6 +26,8 @@ services:
     container_name: iqa-frontend
     ports:
       - "${FRONTEND_PORT:-5180}:80"
+    environment:
+      - IQA_API_KEY=${IQA_API_KEY}
     networks:
       - portal-network
     depends_on:

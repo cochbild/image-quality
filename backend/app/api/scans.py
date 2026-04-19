@@ -5,6 +5,9 @@ from sqlalchemy import desc
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
+from app.core.config import settings as app_settings
+from app.core.logging import get_logger
+from app.core.paths import safe_resolve
 from app.db.session import get_db
 from app.db.models.scan import Scan
 from app.db.models.assessment import Assessment, CategoryScore
@@ -12,7 +15,6 @@ from app.db.models.setting import Setting
 from app.services.assessment_engine import AssessmentEngine
 from app.services.file_manager import list_images, move_image
 from app.services.rubric import DEFAULT_THRESHOLDS, BORDERLINE_LOW, BORDERLINE_HIGH, CATEGORIES
-from app.core.logging import get_logger
 
 logger = get_logger("scans_api")
 router = APIRouter()
@@ -165,33 +167,32 @@ async def _run_scan(scan_id: int, input_dir: str, output_dir: str, reject_dir: s
 
 @router.post("/", response_model=ScanResponse)
 async def start_scan(body: ScanRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    from app.core.config import settings as app_settings
+    input_raw = body.input_dir or _get_setting(db, "input_dir", app_settings.IMAGE_INPUT_DIR)
+    output_raw = body.output_dir or _get_setting(db, "output_dir", app_settings.IMAGE_OUTPUT_DIR)
+    reject_raw = body.reject_dir or _get_setting(db, "reject_dir", app_settings.IMAGE_REJECT_DIR)
 
-    input_dir = body.input_dir or _get_setting(db, "input_dir", app_settings.IMAGE_INPUT_DIR)
-    output_dir = body.output_dir or _get_setting(db, "output_dir", app_settings.IMAGE_OUTPUT_DIR)
-    reject_dir = body.reject_dir or _get_setting(db, "reject_dir", app_settings.IMAGE_REJECT_DIR)
+    # Every scan path must fall inside one of the env-defined image roots.
+    roots = app_settings.allowed_image_roots()
+    input_resolved = safe_resolve(input_raw, roots)
+    output_resolved = safe_resolve(output_raw, roots)
+    reject_resolved = safe_resolve(reject_raw, roots)
 
-    # Validate input dir has images
-    try:
-        images = list_images(input_dir)
-    except FileNotFoundError:
-        raise HTTPException(status_code=400, detail=f"Input directory not found: {input_dir}")
-    if not images:
-        raise HTTPException(status_code=400, detail=f"No images found in: {input_dir}")
-
-    # Validate output/reject dirs are not the same as input dir
-    input_resolved = Path(input_dir).resolve()
-    output_resolved = Path(output_dir).resolve()
-    reject_resolved = Path(reject_dir).resolve()
     if output_resolved == input_resolved:
         raise HTTPException(status_code=400, detail="Output directory must be different from input directory")
     if reject_resolved == input_resolved:
         raise HTTPException(status_code=400, detail="Reject directory must be different from input directory")
 
-    # Create output/reject dirs if they don't exist
+    try:
+        images = list_images(str(input_resolved))
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail=f"Input directory not found: {input_resolved}")
+    if not images:
+        raise HTTPException(status_code=400, detail=f"No images found in: {input_resolved}")
+
     output_resolved.mkdir(parents=True, exist_ok=True)
     reject_resolved.mkdir(parents=True, exist_ok=True)
 
+    input_dir, output_dir, reject_dir = str(input_resolved), str(output_resolved), str(reject_resolved)
     scan = Scan(input_dir=input_dir, output_dir=output_dir, reject_dir=reject_dir, total_images=len(images))
     db.add(scan)
     db.commit()

@@ -18,7 +18,8 @@ _DATA = _default_data_dir()
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://portal_user:portal_pass@localhost:5432/portal_db"
+    IQA_API_KEY: str
+    DATABASE_URL: str
     LM_STUDIO_URL: str = "http://localhost:1234/v1"
     LM_STUDIO_MODEL: str = "qwen/qwen3-vl-8b"
     HOMEHUB_API_URL: str = "http://localhost:8000/api/v1"
@@ -46,6 +47,20 @@ class Settings(BaseSettings):
         except (json.JSONDecodeError, ValueError):
             pass
         return [origin.strip() for origin in v.split(',') if origin.strip()]
+
+    @field_validator('IQA_API_KEY', mode='after')
+    @classmethod
+    def require_non_empty_api_key(cls, v: str) -> str:
+        if not v or len(v) < 16:
+            raise ValueError(
+                "IQA_API_KEY must be set to a non-empty string of at least 16 characters. "
+                "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+            )
+        return v
+
+    def allowed_image_roots(self) -> list[str]:
+        """Roots that bound every filesystem operation the API will perform."""
+        return [self.IMAGE_INPUT_DIR, self.IMAGE_OUTPUT_DIR, self.IMAGE_REJECT_DIR]
 
     class Config:
         env_file = ".env"

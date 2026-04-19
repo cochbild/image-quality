@@ -1,64 +1,78 @@
-import os
-import sys
-import string
 from pathlib import Path
-from fastapi import APIRouter, Query
+
+from fastapi import APIRouter, HTTPException, Query
+
+from app.core.config import settings
+from app.core.paths import safe_resolve
 
 router = APIRouter()
 
 
-@router.get("/drives")
-async def list_drives():
-    """List available drives (Windows) or root mounts."""
-    if sys.platform == "win32":
-        drives = []
-        for letter in string.ascii_uppercase:
-            drive = f"{letter}:\\"
-            if os.path.exists(drive):
-                drives.append({"path": drive, "label": f"{letter}:"})
-        return {"drives": drives}
-    return {"drives": [{"path": "/", "label": "/"}]}
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff"}
+
+
+def _allowed_roots() -> list[Path]:
+    roots: list[Path] = []
+    seen: set[Path] = set()
+    for raw in settings.allowed_image_roots():
+        p = Path(raw).expanduser().resolve()
+        if p not in seen:
+            roots.append(p)
+            seen.add(p)
+    return roots
+
+
+@router.get("/roots")
+async def list_roots():
+    """Return the configured image directories — the only paths the API will browse."""
+    return {
+        "roots": [
+            {"path": str(p), "label": p.name or str(p)}
+            for p in _allowed_roots()
+        ]
+    }
 
 
 @router.get("/browse")
 async def browse_directory(path: str = Query(..., description="Directory path to browse")):
-    """List subdirectories and image count in a given directory."""
-    dir_path = Path(path)
-    if not dir_path.exists():
-        return {"path": str(dir_path), "exists": False, "parent": str(dir_path.parent), "entries": []}
-    if not dir_path.is_dir():
-        return {"path": str(dir_path), "exists": True, "is_dir": False, "parent": str(dir_path.parent), "entries": []}
+    """List subdirectories and image files inside an allowed root."""
+    resolved = safe_resolve(path, settings.allowed_image_roots())
+    if not resolved.exists():
+        raise HTTPException(status_code=404, detail="Directory not found")
+    if not resolved.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory")
 
     entries = []
     try:
-        for entry in sorted(dir_path.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())):
+        for entry in sorted(resolved.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())):
+            if entry.name.startswith(".") or entry.is_symlink():
+                continue
             try:
-                if entry.name.startswith("."):
-                    continue
                 if entry.is_dir():
-                    entries.append({
-                        "name": entry.name,
-                        "path": str(entry),
-                        "type": "directory",
-                    })
-                elif entry.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff"}:
-                    entries.append({
-                        "name": entry.name,
-                        "path": str(entry),
-                        "type": "image",
-                    })
+                    entries.append({"name": entry.name, "path": str(entry), "type": "directory"})
+                elif entry.is_file() and entry.suffix.lower() in IMAGE_SUFFIXES:
+                    entries.append({"name": entry.name, "path": str(entry), "type": "image"})
             except PermissionError:
                 continue
     except PermissionError:
-        return {"path": str(dir_path), "exists": True, "is_dir": True, "error": "Permission denied", "parent": str(dir_path.parent), "entries": []}
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    # Parent is only exposed if it is itself inside an allowed root.
+    parent_path: str | None = None
+    for root in _allowed_roots():
+        try:
+            if resolved.parent.resolve().relative_to(root) is not None:
+                parent_path = str(resolved.parent)
+                break
+        except ValueError:
+            continue
 
     image_count = sum(1 for e in entries if e["type"] == "image")
-
     return {
-        "path": str(dir_path),
+        "path": str(resolved),
         "exists": True,
         "is_dir": True,
-        "parent": str(dir_path.parent),
+        "parent": parent_path,
         "entries": entries,
         "image_count": image_count,
     }

@@ -1,5 +1,6 @@
 import shutil
 from pathlib import Path
+
 from app.core.logging import get_logger
 
 logger = get_logger("file_manager")
@@ -11,21 +12,26 @@ def list_images(directory: str) -> list[Path]:
     dir_path = Path(directory)
     if not dir_path.exists():
         raise FileNotFoundError(f"Directory not found: {directory}")
-    images = [f for f in dir_path.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS]
+    # Skip symlinks — safe_resolve at the API layer ensures the directory is
+    # inside an allowed root, but entries inside could still be symlinks
+    # pointing elsewhere.
+    images = [
+        f for f in dir_path.iterdir()
+        if f.is_file() and not f.is_symlink() and f.suffix.lower() in IMAGE_EXTENSIONS
+    ]
     return sorted(images, key=lambda p: p.name)
 
 
 def move_image(src: str, dest_dir: str) -> str:
     src_path = Path(src)
+    if src_path.is_symlink():
+        raise ValueError(f"Refusing to move symlink: {src_path}")
     dest_dir_path = Path(dest_dir)
     dest_dir_path.mkdir(parents=True, exist_ok=True)
 
     dest_path = dest_dir_path / src_path.name
-
-    # Handle filename collisions
     if dest_path.exists():
-        stem = src_path.stem
-        suffix = src_path.suffix
+        stem, suffix = src_path.stem, src_path.suffix
         counter = 1
         while dest_path.exists():
             dest_path = dest_dir_path / f"{stem}_{counter}{suffix}"

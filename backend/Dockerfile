@@ -17,7 +17,11 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
 
-RUN mkdir -p /app/images/input /app/images/output /app/images/reject && chmod 755 /app/images
+RUN mkdir -p /app/images/input /app/images/output /app/images/reject \
+    && useradd --system --uid 1000 --home /app --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8100
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8100"]
