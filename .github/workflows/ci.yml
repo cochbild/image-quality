@@ -31,7 +31,8 @@ jobs:
         run: uv sync --frozen
 
       - name: Import smoke test
-        run: uv run python -c "from app.main import app; print(f'routes: {len(app.routes)}')"
+        run: |
+          uv run python -c "from app.main import app; print(len(app.routes), 'routes')"
 
       - name: Alembic offline migration check
         run: uv run alembic upgrade head --sql
