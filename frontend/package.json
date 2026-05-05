@@ -29,7 +29,8 @@
   "pnpm": {
     "overrides": {
       "yaml@<1.10.3": "^1.10.3",
-      "follow-redirects@<1.16.0": "^1.16.0"
+      "follow-redirects@<1.16.0": "^1.16.0",
+      "axios": "1.15.1"
     }
   }
 }
