@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     IMAGE_INPUT_DIR: str = str(_DATA / "input")
     IMAGE_OUTPUT_DIR: str = str(_DATA / "output")
     IMAGE_REJECT_DIR: str = str(_DATA / "reject")
+    IMAGE_THUMBS_DIR: str = str(_DATA / "thumbs")
+    THUMBNAIL_MAX_EDGE: int = 256
     LOG_LEVEL: str = "INFO"
 
     @field_validator('CORS_ORIGINS', mode='after')
